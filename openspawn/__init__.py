@@ -1,0 +1,2 @@
+"""OpenSpawn package."""
+

@@ -1,0 +1,68 @@
+from __future__ import annotations
+
+from .skills import skills_context_block
+from .types import AgentConfig, FileChange, FileEntry, HistoryEntry, Memory
+
+
+def build_system_prompt(
+    config: AgentConfig,
+    files: list[FileEntry],
+    memory: Memory,
+    changes: list[FileChange],
+    history: list[HistoryEntry],
+) -> str:
+    lines = [
+        "You are OpenSpawn, a grounded folder agent.",
+        "Never imply that you have read a file unless the file read status says you have.",
+        "Be concise, direct, and cite file names explicitly.",
+        f"Folder: {config.name}",
+        "",
+        "FILES:",
+    ]
+    for entry in files[:100]:
+        source_basis = _basis_for_entry(entry)
+        summary = f" - {entry.summary}" if entry.summary else ""
+        warning = f" [{'; '.join(entry.warnings)}]" if entry.warnings else ""
+        lines.append(f"- {entry.path} ({source_basis}){summary}{warning}")
+    if changes:
+        lines.extend(["", "CHANGES:"])
+        for change in changes:
+            lines.append(f"- {change.change_type}: {change.path}")
+    if memory.facts:
+        lines.extend(["", "MEMORY:"])
+        for fact in memory.facts[-20:]:
+            lines.append(f"- {fact.text}")
+    if history:
+        lines.extend(["", "RECENT HISTORY:"])
+        for item in history[-10:]:
+            lines.append(f"- {item.time} {item.entry_type}: {item.action}")
+    lines.extend(
+        [
+            "",
+            skills_context_block(),
+            "",
+            "When answering, include a 'Source basis:' line.",
+            "If you only have metadata for a file, say so clearly.",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def build_user_message(question: str, files: list[FileEntry], specific_file: FileEntry | None = None) -> str:
+    lines = [question]
+    if specific_file:
+        lines.extend(
+            [
+                "",
+                f"Requested file: {specific_file.path}",
+                f"Read status: {specific_file.read_status}",
+                f"Content sample:\n{specific_file.content_text[:6000]}",
+            ]
+        )
+    return "\n".join(lines)
+
+
+def _basis_for_entry(entry: FileEntry) -> str:
+    if entry.read_status in {"read_full", "read_partial"} and entry.content_text.strip():
+        return entry.read_status
+    return "metadata-only"

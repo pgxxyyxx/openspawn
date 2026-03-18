@@ -1,0 +1,21 @@
+[project]
+name = "prototype"
+version = "0.1.0"
+description = "OpenSpawn prototype"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "openpyxl>=3.1.5",
+    "pypdf>=6.9.1",
+    "python-docx>=1.1.0",
+    "python-pptx>=1.0.0",
+]
+
+[project.scripts]
+openspawn = "openspawn.cli:main"
+
+[tool.uv]
+package = true
+
+[tool.setuptools.packages.find]
+include = ["openspawn*"]

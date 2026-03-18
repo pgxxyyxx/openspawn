@@ -1,0 +1,29 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+.DS_Store
+
+# Virtual environments
+.venv
+
+# Local tool state
+.claude/
+.openspawn-home/
+.openspawn-beta-check/
+
+# Local app/test artifacts
+TestJXA.app/
+TestDropInspect.app/
+
+# AI/dev assistant instructions
+CLAUDE.md
+
+# Private planning docs
+OpenSpawn PRD v4.md
+
+# Agent state directories
+.agent/
