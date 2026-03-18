@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OpenSpawn</title>
+  <style>
+    :root{
+      --bg:#0b0c10;
+      --panel:#11131a;
+      --panel-2:#151822;
+      --text:#f3f4f6;
+      --muted:#b6bcc8;
+      --line:#232838;
+      --accent:#ffffff;
+      --accent-text:#0b0c10;
+      --max:1120px;
+      --radius:18px;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif}
+    a{text-decoration:none;color:inherit}
+    .wrap{max-width:var(--max);margin:0 auto;padding:0 24px}
+    .nav{
+      position:sticky;top:0;z-index:20;
+      backdrop-filter:saturate(180%) blur(14px);
+      background:rgba(11,12,16,.72);
+      border-bottom:1px solid rgba(255,255,255,.06);
+    }
+    .nav-inner{display:flex;align-items:center;justify-content:space-between;height:72px}
+    .brand{font-weight:700;letter-spacing:.01em}
+    .nav-links{display:flex;gap:26px;color:var(--muted);font-size:14px}
+    .cta{
+      display:inline-flex;align-items:center;justify-content:center;
+      padding:14px 22px;border-radius:999px;background:var(--accent);
+      color:var(--accent-text);font-weight:700;border:1px solid rgba(255,255,255,.08);
+      box-shadow:0 10px 30px rgba(255,255,255,.08);
+    }
+    .cta.secondary{
+      background:transparent;color:var(--text);border:1px solid var(--line);box-shadow:none
+    }
+    .hero{padding:84px 0 56px;scroll-margin-top:96px}
+    .hero-grid{
+      display:grid;grid-template-columns:1.15fr .85fr;gap:36px;align-items:center
+    }
+    .eyebrow{
+      display:inline-flex;gap:10px;align-items:center;
+      border:1px solid rgba(255,255,255,.08);
+      color:var(--muted);
+      border-radius:999px;padding:10px 14px;background:rgba(255,255,255,.03);
+      font-size:13px
+    }
+    h1{
+      font-size:clamp(42px,7vw,82px);
+      line-height:.95;
+      letter-spacing:-.04em;
+      margin:18px 0 18px;
+      max-width:900px
+    }
+    .sub{
+      font-size:clamp(18px,2.3vw,24px);
+      line-height:1.4;color:var(--muted);max-width:700px;margin:0 0 28px
+    }
+    .hero-actions{display:flex;gap:14px;flex-wrap:wrap;margin-top:24px}
+    .hero-note{margin-top:16px;color:var(--muted);font-size:14px}
+    .mock{
+      background:linear-gradient(180deg,var(--panel),var(--panel-2));
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:24px;padding:18px;
+      box-shadow:0 24px 80px rgba(0,0,0,.35);
+    }
+    .mock-top{display:flex;gap:8px;padding:4px 0 16px}
+    .dot{width:10px;height:10px;border-radius:50%;background:#353949}
+    .window{
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:18px;overflow:hidden;background:#0f1218
+    }
+    .window-head{
+      display:flex;justify-content:space-between;align-items:center;
+      padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.06);background:#131722
+    }
+    .window-title{font-size:14px;color:#e6e8ef;font-weight:600}
+    .window-body{padding:18px}
+    .status{
+      display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px
+    }
+    .card{
+      background:rgba(255,255,255,.03);
+      border:1px solid rgba(255,255,255,.06);
+      border-radius:16px;padding:16px
+    }
+    .kicker{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:8px}
+    .big{font-size:24px;font-weight:700;letter-spacing:-.03em}
+    .list{margin:8px 0 0;padding-left:18px;color:var(--muted);line-height:1.6}
+    .section{padding:38px 0;scroll-margin-top:96px}
+    .section h2{
+      font-size:clamp(28px,4.2vw,52px);line-height:1.02;letter-spacing:-.035em;margin:0 0 12px
+    }
+    .section p.lead{font-size:19px;line-height:1.55;color:var(--muted);max-width:760px;margin:0 0 28px}
+    .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+    .grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+    .feature h3,.audience h3{margin:0 0 10px;font-size:20px;letter-spacing:-.02em}
+    .feature p,.audience p,.problem p{margin:0;color:var(--muted);line-height:1.6}
+    .problem-grid,.flow{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+    .flow .step-num{
+      width:36px;height:36px;border-radius:999px;border:1px solid rgba(255,255,255,.08);
+      display:flex;align-items:center;justify-content:center;margin-bottom:14px;color:var(--muted)
+    }
+    .contrast{
+      display:grid;grid-template-columns:1fr 1fr;gap:18px
+    }
+    .contrast .card ul{margin:10px 0 0;padding-left:18px;color:var(--muted);line-height:1.7}
+    .muted{color:var(--muted)}
+    .final{
+      padding:54px 0 86px;
+    }
+    .final-box{
+      padding:34px;border-radius:24px;
+      background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.03));
+      border:1px solid rgba(255,255,255,.08);
+      text-align:center
+    }
+    .final h2{margin-bottom:10px}
+    footer{
+      border-top:1px solid rgba(255,255,255,.06);
+      color:var(--muted);font-size:14px
+    }
+    .footer-inner{display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap;padding:22px 0 34px}
+    @media (max-width: 960px){
+      .hero-grid,.grid-4,.grid-3,.problem-grid,.flow,.contrast{grid-template-columns:1fr}
+      .nav-links{display:none}
+      .hero{padding-top:54px}
+    }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <div class="wrap nav-inner">
+      <div class="brand">OpenSpawn</div>
+      <div class="nav-links">
+        <a href="#how">How it works</a>
+        <a href="#features">What it does</a>
+        <a href="#users">Who it's for</a>
+      </div>
+      <a class="cta" href="https://github.com/pgxxyyxx/openspawn" target="_blank" rel="noopener noreferrer">View on GitHub</a>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div class="wrap hero-grid">
+      <div>
+        <div class="eyebrow">Folder-native AI workspace</div>
+        <h1>Bring your AI to your work.<br>Not the other way around.</h1>
+        <p class="sub">Run it directly from your folders. No uploads. No copy-paste.</p>
+        <div class="hero-actions">
+          <a class="cta" id="download" href="https://github.com/pgxxyyxx/openspawn" target="_blank" rel="noopener noreferrer">Download on GitHub</a>
+          <a class="cta secondary" href="#how">See how it works</a>
+        </div>
+        <div class="hero-note">Works with your existing setup. Bring your own model or use built-in.</div>
+      </div>
+
+      <div class="mock">
+        <div class="mock-top">
+          <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+        </div>
+        <div class="window">
+          <div class="window-head">
+            <div class="window-title">/Board Prep / Q2 Launch</div>
+            <div class="muted" style="font-size:13px">Last opened 2 hours ago</div>
+          </div>
+          <div class="window-body">
+            <div class="status">
+              <div class="card">
+                <div class="kicker">What changed</div>
+                <div class="big">3 files updated</div>
+                <ul class="list">
+                  <li>Pricing memo revised</li>
+                  <li>Board deck updated</li>
+                  <li>Open questions added</li>
+                </ul>
+              </div>
+              <div class="card">
+                <div class="kicker">What to do next</div>
+                <div class="big">2 actions</div>
+                <ul class="list">
+                  <li>Review new pricing assumptions</li>
+                  <li>Update slide 12 recommendation</li>
+                </ul>
+              </div>
+            </div>
+            <div class="card">
+              <div class="kicker">Project summary</div>
+              <p class="muted" style="margin:0;line-height:1.6">
+                Product launch prep across pricing, messaging, board narrative, and unresolved GTM assumptions.
+                Last week focused on deck revision and decision cleanup.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <section class="section">
+    <div class="wrap">
+      <h2>Stop moving your work to tools.</h2>
+      <p class="lead">Your files already live in folders. But every time you use AI, you upload files, copy context, and start over.</p>
+      <div class="problem-grid">
+        <div class="card problem">
+          <h3>Upload files</h3>
+          <p>Move documents into a chat just to get started.</p>
+        </div>
+        <div class="card problem">
+          <h3>Recreate context</h3>
+          <p>Explain the project again because the tool doesn’t really know it.</p>
+        </div>
+        <div class="card problem">
+          <h3>Lose continuity</h3>
+          <p>Come back later and start from zero.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="how">
+    <div class="wrap">
+      <h2>Work from your folder. Not a chat.</h2>
+      <p class="lead">Open a project and continue where you left off. No moving files around. No switching back and forth.</p>
+      <div class="flow">
+        <div class="card">
+          <div class="step-num">1</div>
+          <h3>Open a folder</h3>
+          <p class="muted">Any project. Any files. Strategy docs, notes, decks, research, models.</p>
+        </div>
+        <div class="card">
+          <div class="step-num">2</div>
+          <h3>It builds context</h3>
+          <p class="muted">It reads the work, understands the project, and keeps durable memory inside the folder.</p>
+        </div>
+        <div class="card">
+          <div class="step-num">3</div>
+          <h3>Reopen anytime</h3>
+          <p class="muted">See what changed, what matters, and what to do next.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="features">
+    <div class="wrap">
+      <h2>What it does</h2>
+      <p class="lead">This is not another chat window. It works directly on the project itself.</p>
+      <div class="grid-4">
+        <div class="card feature">
+          <h3>Understands your project</h3>
+          <p>Reads your files and builds a working understanding of the project.</p>
+        </div>
+        <div class="card feature">
+          <h3>Remembers automatically</h3>
+          <p>Keeps context across sessions so you don’t restart from scratch.</p>
+        </div>
+        <div class="card feature">
+          <h3>Tracks what changed</h3>
+          <p>Shows what’s new, what matters, and what needs attention.</p>
+        </div>
+        <div class="card feature">
+          <h3>Moves work forward</h3>
+          <p>Produces summaries, decisions, and next steps instead of just chat.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <h2>What you stop doing</h2>
+      <p class="lead">Less friction. More continuity.</p>
+      <div class="contrast">
+        <div class="card">
+          <h3>Before</h3>
+          <ul>
+            <li>Uploading files</li>
+            <li>Copy-pasting context</li>
+            <li>Re-summarizing work</li>
+            <li>Asking “what’s the latest?”</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>After</h3>
+          <ul>
+            <li>Open folder</li>
+            <li>See project status</li>
+            <li>Review what changed</li>
+            <li>Keep going</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="users">
+    <div class="wrap">
+      <h2>If your work lives in folders, this is for you.</h2>
+      <p class="lead">Built for people whose projects are spread across documents, notes, decks, and research.</p>
+      <div class="grid-4">
+        <div class="card audience">
+          <h3>Consultants</h3>
+          <p>Stop rebuilding context every time you reopen a client project.</p>
+        </div>
+        <div class="card audience">
+          <h3>Product managers</h3>
+          <p>Keep specs, research, and decisions aligned without chasing documents.</p>
+        </div>
+        <div class="card audience">
+          <h3>Founders</h3>
+          <p>Manage multiple parallel projects without losing the thread.</p>
+        </div>
+        <div class="card audience">
+          <h3>Operations</h3>
+          <p>Always know where things stand and what changed.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="final">
+    <div class="wrap">
+      <div class="final-box">
+        <h2>Bring your AI to your work.</h2>
+        <p class="lead" style="margin:0 auto 24px">Run it directly from your folders. No uploads. No copy-paste.</p>
+        <a class="cta" href="https://github.com/pgxxyyxx/openspawn" target="_blank" rel="noopener noreferrer">Download on GitHub</a>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap footer-inner">
+      <div>OpenSpawn</div>
+      <div>Local-first • Works with your existing tools • Bring your own model</div>
+    </div>
+  </footer>
+</body>
+</html>
