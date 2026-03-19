@@ -1,134 +1,89 @@
-## OpenSpawn
+# OpenSpawn
 
-Persistent local AI agents for your folders on macOS.
+A persistent local AI agent for your folders on macOS.
 
-OpenSpawn turns a folder into a persistent local AI workspace. It scans supported files, keeps local `.agent/` state, opens with an AI-generated orientation, and lets you keep working through a folder-local `OpenSpawn Agent.app`.
+You drop a folder in. OpenSpawn reads supported files inside, orients you to what matters, and lets you ask grounded questions from your actual files. When you come back, it picks up where you left off.
 
-macOS-only GitHub beta.
+---
 
-## Current Status
+## What You Get
 
-Working now:
+**On first open** — an immediate AI-generated orientation. What's in this folder, what looks important, what you might want to do next. Grounded in files it actually read.
 
-- main launcher: `OpenSpawn.app`
-- shell fallback: `OpenSpawn.command`
-- folder-local agent app: `OpenSpawn Agent.app`
-- file reading and grounded chat
-- local-first folder scan and session startup
-- AI-generated folder orientation on first open and reopen
-- session capture
+**On reopen** — continuity, not a blank slate. Claude leads with your open threads from last session, then what changed, then suggested next actions.
 
-For build and release context, see:
+**In between** — chat with Claude grounded in your files. Chat responses cite the specific files they came from. If you ask about a specific file it hasn't read yet, OpenSpawn can read it first.
 
-- [docs/next-session-handoff.md](docs/next-session-handoff.md)
-- [TODOS.md](TODOS.md)
-- [docs/github-beta-launch-plan.md](docs/github-beta-launch-plan.md)
-- [docs/beta-release-checklist.md](docs/beta-release-checklist.md)
+**When you're done** — type `done`. OpenSpawn saves a session summary: what was worked on, what's unfinished, any decisions made. That feeds the next reopen.
 
-### Beta Install
+---
 
-Current public-beta plan: distribute through GitHub first, not DMG.
+## User Journey
 
-Recommended install path:
+**First time with a folder:**
+
+1. Drag the folder onto `OpenSpawn.app`
+2. OpenSpawn scans and reads your files locally
+3. Claude orients you — what's here, what looks important, what to do next
+4. Ask questions, get answers grounded in your actual files
+5. Type `done` before you leave — saves open threads and decisions for next time
+
+**Every time after:**
+
+1. Open `OpenSpawn Agent.app` inside the folder, or drag the folder onto `OpenSpawn.app` again
+2. Claude leads with what was left unfinished, then what changed
+3. Pick up where you left off
+
+---
+
+## Install
+
+Requires macOS and Python 3.12+. Uses `uv` for dependency management.
 
 ```bash
 brew install uv
 uv sync
 uv run python -m openspawn --setup
-open OpenSpawn.app
 ```
 
-If the app launcher misbehaves, use:
+Then double-click `OpenSpawn.app` to launch, or drag a folder onto it.
 
-```bash
-uv run python -m openspawn /path/to/folder
-```
+**Claude setup:** Run `--setup` once and paste your [Anthropic API key](https://console.anthropic.com/). OpenSpawn saves it for future runs.
 
-If you do not use Homebrew, install `uv` first and then run `uv sync`.
+---
 
-If `OpenSpawn.app` is blocked or does not open cleanly, try:
+## Commands
 
-1. `uv run python -m openspawn /path/to/folder`
-2. `OpenSpawn.command`
+Inside a folder session:
 
-If Claude-backed features fail:
+| Command | What it does |
+|---|---|
+| *(any question)* | Chat with Claude, grounded in your files |
+| `help` | Show available commands |
+| `done` | Save a session summary — open threads, decisions |
+| `save [filename]` | Save last response to a `.md` or `.docx` file |
+| `setup` | Add or replace your Claude API key |
+| `quit` | Save state and exit |
 
-- local startup and folder state should still remain usable
-- some Claude-backed flows may time out while the beta is still being stabilized
+---
 
-### Run
+## How It Works
 
-```bash
-uv run python -m openspawn --setup
-uv run python -m openspawn --init --path /path/to/folder
-uv run python -m openspawn --path /path/to/folder
-uv run python -m openspawn /path/to/folder
-```
+- **Local-first** — files are scanned and indexed on your machine. No cloud sync.
+- **Grounded answers** — Claude only claims to know what it has actually read. Chat responses include a source basis.
+- **Persistent state** — each folder gets a hidden `.agent/` directory with its file index, session history, memory, and session notes.
+- **Session continuity** — `done` captures open threads and decisions. Reopen surfaces them before anything else.
 
-Or double-click:
+Supported file types: text, Markdown, PDF, CSV/TSV, Excel, Word, Jupyter notebooks.
 
-- `OpenSpawn.app` for the main Finder-style launcher
-- `OpenSpawn.command` as the shell fallback
-- `OpenSpawn Agent.app` inside a spawned folder
+---
 
-Drag-and-drop:
-
-- drag a folder onto `OpenSpawn.app`
-- or invoke `openspawn /path/to/folder`
-- both are treated as explicit intent to create/open that folder's agent
-
-### Claude Setup
-
-Run `uv run python -m openspawn --setup` and paste your Anthropic API key once.
-
-OpenSpawn will save it for future launcher runs.
-
-### Beta Caveats
+## Beta Caveats
 
 - macOS only
-- currently aimed at early users comfortable downloading from GitHub
-- local-first startup works without Claude
-- Claude features send selected prompt/file excerpts to Anthropic
-- some Claude-backed flows are still being stabilized
-- this is a GitHub beta, not yet polished distribution
+- GitHub beta — not yet polished distribution
+- Claude features send selected prompt and file excerpts to Anthropic
+- Local scanning and state work without Claude; chat features require an API key
+- Some Claude-backed flows are still being stabilized (latency, timeouts)
 
-### Local State
-
-OpenSpawn stores per-folder local state in a hidden `.agent/` directory inside the folder you open.
-
-That state can include:
-
-- file index and scan status
-- extracted summaries / cached text
-- project context
-- session history and notes
-
-### Feedback
-
-For beta issues, open a GitHub bug report using the repo's beta bug template and include the exact error text when possible.
-
-Useful commands once inside a folder session:
-
-- ask a normal question
-- `done` to save a session summary
-- `quit` to save and exit
-
-### Current Scope
-
-- CLI-first folder agent
-- main app-style home screen in development
-- drag-and-drop app entrypoint in development
-- persisted `.agent` state
-- folder scanning and change detection
-- supported file reading with normalized extraction results
-- automatic AI-generated first-open and reopen orientation
-- generated `.agent/project.md` context file
-- session capture via `done`
-- grounded chat with Claude when configured
-- degraded local mode without AI
-
-### Current Creation Rule
-
-- `openspawn /path/to/folder` creates an agent if needed, because invoking OpenSpawn with a folder is treated as intent
-- `--init` also creates an agent explicitly
-- drag-and-drop uses the same intent rule
+For issues, open a GitHub bug report and include the exact error text.
