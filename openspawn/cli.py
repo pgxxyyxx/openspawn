@@ -36,12 +36,13 @@ FIRST_OPEN_PROMPT = (
 REOPEN_PROMPT = (
     "This is a reopen of a folder the user has worked in before. "
     "Do not re-explain the folder from scratch. "
-    "Use the recent history and detected changes to pick up where the user left off. "
-    "Start with one of these two openings and nothing else before it: "
-    "If files changed since the last session, start with: 'Changes since last session:' followed by a brief list. "
-    "If nothing changed, start with a single sentence acknowledging that and referencing what the user was last working on. "
+    "Use recent session notes first, then recent history and detected changes, to pick up where the user left off. "
+    "If there are open threads from the last session note, lead with the heading 'Open threads from last session:' "
+    "and list the most important unfinished items before discussing file changes. "
+    "If there are no open threads but files changed, start with: 'Changes since last session:' followed by a brief list. "
+    "If there are no open threads and no meaningful changes, start with a single sentence acknowledging that and referencing what the user was last working on. "
     "Then give 3-4 concrete suggestions for what to do next. "
-    "Base suggestions on the recent history — what questions were asked, what was being worked on, what was left unfinished. "
+    "Base suggestions on the open threads, recent history, and detected changes. "
     "Mention specific file names when useful. "
     "End with the heading: What do you want me to do next? "
     "Keep the whole response short. Do not re-summarize the folder. Do not repeat what you said on first open."
@@ -230,15 +231,16 @@ def run_cli(session: AgentSession, created_new: bool = False) -> None:
                 print(str(exc))
             continue
         if cmd == "done":
-            note = session.capture_session_note()
+            with wait_indicator("Saving session"):
+                note = session.capture_session_note(client)
             print("Session summary saved.")
+            if note.open_threads:
+                print("Open threads:")
+                for item in note.open_threads:
+                    print(f"- {item}")
             if note.decisions:
                 print("Decisions:")
                 for item in note.decisions:
-                    print(f"- {item}")
-            if note.follow_ups:
-                print("Follow-ups:")
-                for item in note.follow_ups:
                     print(f"- {item}")
             continue
         if cmd == "setup":

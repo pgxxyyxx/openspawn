@@ -3,13 +3,24 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
-from .ai import ClaudeClient, get_api_key
+from .ai import ClaudeClient, ClaudeError
 from .context import build_system_prompt, build_user_message
 from .extractor import extract_file
 from .launcher import ensure_folder_launcher
 from .scanner import detect_changes, prioritize, scan_folder, should_read_file
 from .store import AgentStore, load_global_config, save_global_config
-from .types import AgentConfig, ExtractionResult, Fact, FileChange, FileEntry, FileIndex, HistoryEntry, Memory, SessionNote
+from .types import (
+    AgentConfig,
+    ArtifactRecord,
+    ExtractionResult,
+    Fact,
+    FileChange,
+    FileEntry,
+    FileIndex,
+    HistoryEntry,
+    Memory,
+    SessionNote,
+)
 from .utils import utc_now
 
 
@@ -23,6 +34,7 @@ class AgentSession:
         self.index = self.store.load_index()
         self.history = self.store.load_history()
         self.session_notes = self.store.load_session_notes()
+        self.artifacts = self.store.load_artifacts()
         self.changes: list[FileChange] = []
         self.last_response = ""
 
@@ -100,7 +112,16 @@ class AgentSession:
                 if entry.read_status not in {"read_full", "read_partial"}:
                     specific = self.read_file_now(entry.path) or entry
                 break
-        system_prompt = build_system_prompt(self.config, self.index.files, self.memory, self.changes, self.history)
+        system_prompt = build_system_prompt(
+            self.config,
+            self.index.files,
+            self.memory,
+            self.changes,
+            self.history,
+            self.session_notes,
+            self.artifacts,
+            include_skills=False,
+        )
         user_message = build_user_message(question, self.index.files, specific)
         answer = client.chat(system_prompt, user_message)
         self.last_response = answer
@@ -121,10 +142,19 @@ class AgentSession:
             lines.append("Index is partial because folder limits were reached.")
         return lines
 
-    def capture_session_note(self) -> SessionNote:
+    def capture_session_note(self, client: ClaudeClient | None = None) -> SessionNote:
+        remembered_facts = [fact.text for fact in self.memory.facts[-5:]]
+        open_threads: list[str] = []
+        decisions: list[str] = []
+        if client is not None:
+            open_threads, decisions = self._generate_session_handoff(client)
+        if not open_threads:
+            open_threads = self._fallback_open_threads()
         note = SessionNote(
             created_at=utc_now(),
-            remembered_facts=[fact.text for fact in self.memory.facts[-5:]],
+            remembered_facts=remembered_facts,
+            open_threads=open_threads[:5],
+            decisions=decisions[:5],
         )
         self.session_notes.append(note)
         self.add_history("Captured session note", "session")
@@ -141,6 +171,13 @@ class AgentSession:
             _save_as_docx(content, path)
         else:
             path.write_text(content, encoding="utf-8")
+        self.artifacts.append(
+            ArtifactRecord(
+                filename=path.name,
+                artifact_type=_artifact_type_for_path(path),
+                created_at=utc_now(),
+            )
+        )
         self.add_history(f"Saved response to {filename}", "save")
         self.save()
         return path
@@ -198,6 +235,7 @@ class AgentSession:
         self.store.save_index(self.index)
         self.store.save_history(self.history)
         self.store.save_session_notes(self.session_notes)
+        self.store.save_artifacts(self.artifacts)
 
     def _write_readme(self) -> None:
         lines = [f"# {self.config.name}", "", f"Last scan: {self.index.scanned_at}", "", "## Status"]
@@ -214,11 +252,25 @@ class AgentSession:
             lines.extend(["", "## Memory"])
             for fact in self.memory.facts[-20:]:
                 lines.append(f"- {fact.text}")
+        if self.session_notes:
+            latest = self.session_notes[-1]
+            if latest.open_threads:
+                lines.extend(["", "## Open Threads"])
+                for item in latest.open_threads[:5]:
+                    lines.append(f"- {item}")
+        if self.artifacts:
+            lines.extend(["", "## Saved Artifacts"])
+            for artifact in self.artifacts[-10:]:
+                lines.append(f"- `{artifact.filename}` — {artifact.artifact_type} — {artifact.created_at}")
         self.store.write_readme("\n".join(lines) + "\n")
 
     def _write_done_note(self, note: SessionNote) -> None:
         lines = ["# Session Note", "", f"Created: {note.created_at}", "", "## Remembered Facts"]
         lines.extend(f"- {item}" for item in (note.remembered_facts or ["None yet."]))
+        lines.extend(["", "## Open Threads"])
+        lines.extend(f"- {item}" for item in (note.open_threads or ["None."]))
+        lines.extend(["", "## Decisions"])
+        lines.extend(f"- {item}" for item in (note.decisions or ["None."]))
         self.store.write_done_note("\n".join(lines) + "\n")
 
     def _update_global_agents(self) -> None:
@@ -226,6 +278,51 @@ class AgentSession:
         agents.append({"path": str(self.folder), "name": self.config.name, "last_opened": utc_now()})
         self.global_config.agents = agents[-100:]
         save_global_config(self.global_config)
+
+    def _generate_session_handoff(self, client: ClaudeClient) -> tuple[list[str], list[str]]:
+        system_prompt = build_system_prompt(
+            self.config,
+            self.index.files,
+            self.memory,
+            self.changes,
+            self.history,
+            self.session_notes,
+            self.artifacts,
+        )
+        recent_response = self.last_response.strip()
+        if recent_response:
+            recent_response = recent_response[:4000]
+        user_message_lines = [
+            "Create a concise session handoff from the current folder state.",
+            "Return exactly these sections and nothing else:",
+            "Open Threads:",
+            "- ...",
+            "Decisions:",
+            "- ...",
+            "Rules:",
+            "- Keep each bullet concrete and grounded in the folder or recent work.",
+            "- Use 1-3 bullets per section.",
+            "- If there is nothing to list, write '- None'.",
+        ]
+        if recent_response:
+            user_message_lines.extend(["", "Most recent assistant response:", recent_response])
+        try:
+            response = client.chat(system_prompt, "\n".join(user_message_lines), max_tokens=600)
+        except ClaudeError:
+            return [], []
+        sections = _parse_handoff_sections(response)
+        return sections["open_threads"], sections["decisions"]
+
+    def _fallback_open_threads(self) -> list[str]:
+        items: list[str] = []
+        for entry in reversed(self.history):
+            if entry.entry_type == "chat" and entry.action.startswith("Asked: "):
+                question = entry.action.removeprefix("Asked: ").strip()
+                if question and question not in items:
+                    items.append(question)
+            if len(items) >= 3:
+                break
+        return items
 
 
 def reuse_entry(current: FileEntry, previous: FileEntry) -> FileEntry:
@@ -263,6 +360,41 @@ def summarize_extraction(entry: FileEntry, result: ExtractionResult) -> str:
 
 def trim_to_bytes(text: str, max_bytes: int) -> str:
     return text.encode("utf-8")[:max_bytes].decode("utf-8", errors="ignore")
+
+
+def _artifact_type_for_path(path: Path) -> str:
+    suffix = path.suffix.lower()
+    if suffix == ".docx":
+        return "docx"
+    if suffix == ".md":
+        return "markdown"
+    if suffix == ".txt":
+        return "text"
+    return suffix.lstrip(".") or "file"
+
+
+def _parse_handoff_sections(text: str) -> dict[str, list[str]]:
+    mapping = {
+        "open threads:": "open_threads",
+        "decisions:": "decisions",
+    }
+    sections = {value: [] for value in mapping.values()}
+    current: str | None = None
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        key = mapping.get(line.lower())
+        if key is not None:
+            current = key
+            continue
+        if current is None or not line.startswith("-"):
+            continue
+        item = line[1:].strip()
+        if not item or item.lower() == "none":
+            continue
+        sections[current].append(item)
+    return sections
 
 
 def _save_as_docx(content: str, path: Path) -> None:

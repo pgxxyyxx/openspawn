@@ -7,7 +7,7 @@ from dataclasses import asdict, fields, is_dataclass
 from pathlib import Path
 from typing import Any, TypeVar, get_args, get_origin, get_type_hints
 
-from .types import AgentConfig, FileIndex, GlobalConfig, HistoryEntry, Memory, SessionNote
+from .types import AgentConfig, ArtifactRecord, FileIndex, GlobalConfig, HistoryEntry, Memory, SessionNote
 from .utils import utc_now
 
 T = TypeVar("T")
@@ -94,6 +94,12 @@ class AgentStore:
 
     def save_session_notes(self, notes: list[SessionNote]) -> None:
         self._save("session-notes.json", notes[-100:])
+
+    def load_artifacts(self) -> list[ArtifactRecord]:
+        return self._load_optional("artifacts.json", list[ArtifactRecord], default=[]) or []
+
+    def save_artifacts(self, artifacts: list[ArtifactRecord]) -> None:
+        self._save("artifacts.json", artifacts[-200:])
 
     def write_project_context(self, content: str) -> None:
         path = self.agent_dir / "project.md"

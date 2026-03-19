@@ -89,6 +89,15 @@ class HistoryEntry:
 class SessionNote:
     created_at: str
     remembered_facts: list[str] = field(default_factory=list)
+    open_threads: list[str] = field(default_factory=list)
+    decisions: list[str] = field(default_factory=list)
+
+
+@dataclass
+class ArtifactRecord:
+    filename: str
+    artifact_type: str
+    created_at: str
 
 
 @dataclass

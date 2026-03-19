@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .skills import skills_context_block
-from .types import AgentConfig, FileChange, FileEntry, HistoryEntry, Memory
+from .types import AgentConfig, ArtifactRecord, FileChange, FileEntry, HistoryEntry, Memory, SessionNote
 
 
 def build_system_prompt(
@@ -10,6 +10,9 @@ def build_system_prompt(
     memory: Memory,
     changes: list[FileChange],
     history: list[HistoryEntry],
+    session_notes: list[SessionNote],
+    artifacts: list[ArtifactRecord],
+    include_skills: bool = True,
 ) -> str:
     lines = [
         "You are OpenSpawn, a grounded folder agent.",
@@ -36,10 +39,22 @@ def build_system_prompt(
         lines.extend(["", "RECENT HISTORY:"])
         for item in history[-10:]:
             lines.append(f"- {item.time} {item.entry_type}: {item.action}")
+    if session_notes:
+        lines.extend(["", "RECENT SESSION NOTES:"])
+        for note in session_notes[-3:]:
+            lines.append(f"- {note.created_at}")
+            for thread in note.open_threads[:3]:
+                lines.append(f"  open thread: {thread}")
+            for decision in note.decisions[:3]:
+                lines.append(f"  decision: {decision}")
+    if artifacts:
+        lines.extend(["", "RECENT ARTIFACTS:"])
+        for artifact in artifacts[-10:]:
+            lines.append(f"- {artifact.filename} ({artifact.artifact_type}, saved {artifact.created_at})")
+    if include_skills:
+        lines.extend(["", skills_context_block()])
     lines.extend(
         [
-            "",
-            skills_context_block(),
             "",
             "When answering, include a 'Source basis:' line.",
             "If you only have metadata for a file, say so clearly.",
