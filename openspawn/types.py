@@ -10,6 +10,7 @@ class Limits:
     max_text_bytes: int = 262_144
     max_pdf_pages: int = 20
     max_folder_cache_bytes: int = 25 * 1024 * 1024
+    prompt_budget: int = 120_000
 
 
 @dataclass
@@ -109,3 +110,11 @@ class ExtractionResult:
     structured_summary: dict[str, object]
     warnings: list[str] = field(default_factory=list)
     error: str | None = None
+
+
+@dataclass
+class PromptBuildResult:
+    prompt: str
+    included_file_count: int
+    total_file_count: int
+    estimated_tokens: int

@@ -7,7 +7,7 @@ from .ai import ClaudeClient, ClaudeError
 from .context import build_system_prompt, build_user_message
 from .extractor import extract_file
 from .launcher import ensure_folder_launcher
-from .scanner import detect_changes, prioritize, scan_folder, should_read_file
+from .scanner import describe_changes, detect_changes, prioritize, scan_folder, should_read_file
 from .store import AgentStore, load_global_config, save_global_config
 from .types import (
     AgentConfig,
@@ -25,6 +25,9 @@ from .utils import utc_now
 
 
 class AgentSession:
+    MAX_CONVERSATION_MESSAGES = 20
+    MAX_CONVERSATION_BYTES = 40_000
+
     def __init__(self, folder: Path):
         self.folder = folder.resolve()
         self.store = AgentStore(self.folder)
@@ -36,6 +39,7 @@ class AgentSession:
         self.session_notes = self.store.load_session_notes()
         self.artifacts = self.store.load_artifacts()
         self.changes: list[FileChange] = []
+        self.conversation: list[dict[str, str]] = []
         self.last_response = ""
 
     @classmethod
@@ -44,6 +48,7 @@ class AgentSession:
         if session.config is None:
             session.config = AgentConfig(name=folder.name, root_path=str(folder.resolve()), created_at=utc_now())
         session.refresh(initial=True)
+        session.conversation = []
         ensure_folder_launcher(folder)
         session._save()
         session._update_global_agents()
@@ -54,13 +59,14 @@ class AgentSession:
             raise FileNotFoundError("No OpenSpawn agent exists in this folder yet. Run with --init first.")
         ensure_folder_launcher(self.folder)
         self.refresh(initial=False)
+        self.conversation = []
         self._save()
         self._update_global_agents()
 
     def refresh(self, initial: bool) -> None:
         previous_index = self.index
         new_index = scan_folder(self.folder, self.global_config.limits)
-        self.changes = detect_changes(previous_index, new_index)
+        raw_changes = detect_changes(previous_index, new_index)
         old_entries = {entry.path: entry for entry in previous_index.files}
         merged_entries: list[FileEntry] = []
         for entry in prioritize(new_index.files):
@@ -72,6 +78,8 @@ class AgentSession:
                 merged_entries.append(self._read_entry(entry))
             else:
                 merged_entries.append(entry)
+        merged_by_path = {entry.path: entry for entry in merged_entries}
+        self.changes = describe_changes(raw_changes, old_entries, merged_by_path)
         self.index = FileIndex(files=sorted(merged_entries, key=lambda item: item.path), scanned_at=utc_now(), partial=new_index.partial)
         self._trim_cache()
         self._write_readme()
@@ -105,29 +113,77 @@ class AgentSession:
         self.save()
 
     def chat(self, client: ClaudeClient, question: str) -> str:
-        specific = None
-        for entry in self.index.files:
-            if entry.name.lower() in question.lower() or entry.path.lower() in question.lower():
-                specific = entry
-                if entry.read_status not in {"read_full", "read_partial"}:
-                    specific = self.read_file_now(entry.path) or entry
-                break
+        system_prompt, user_message = self._prepare_chat_context(question)
+        self.conversation.append({"role": "user", "content": user_message})
+        self._trim_conversation()
+        try:
+            answer = client.chat_multi(system_prompt.prompt, self.conversation)
+        except Exception:
+            if self.conversation and self.conversation[-1]["role"] == "user":
+                self.conversation.pop()
+            raise
+        self.conversation.append({"role": "assistant", "content": answer})
+        self._trim_conversation()
+        if system_prompt.included_file_count < system_prompt.total_file_count:
+            answer = (
+                f"{answer}\n\nContext note: Context includes {system_prompt.included_file_count} "
+                f"of {system_prompt.total_file_count} files."
+            )
+        self.last_response = answer
+        self.add_history(f"Asked: {question[:80]}", "chat")
+        self.save()
+        return answer
+
+    def chat_stream(self, client: ClaudeClient, question: str):
+        system_prompt, user_message = self._prepare_chat_context(question)
+        self.conversation.append({"role": "user", "content": user_message})
+        self._trim_conversation()
+        parts: list[str] = []
+        try:
+            for chunk in client.chat_multi_stream(system_prompt.prompt, self.conversation):
+                parts.append(chunk)
+                yield chunk
+        except Exception:
+            if self.conversation and self.conversation[-1]["role"] == "user":
+                self.conversation.pop()
+            raise
+        answer = "".join(parts).strip()
+        self.conversation.append({"role": "assistant", "content": answer})
+        self._trim_conversation()
+        if system_prompt.included_file_count < system_prompt.total_file_count:
+            note = (
+                f"\n\nContext note: Context includes {system_prompt.included_file_count} "
+                f"of {system_prompt.total_file_count} files."
+            )
+            answer = f"{answer}{note}"
+            yield note
+        self.last_response = answer
+        self.add_history(f"Asked: {question[:80]}", "chat")
+        self.save()
+
+    def _prepare_chat_context(self, question: str):
+        specific = self._find_specific_file_for_question(question)
         system_prompt = build_system_prompt(
             self.config,
+            self.global_config.limits.prompt_budget,
             self.index.files,
             self.memory,
             self.changes,
             self.history,
             self.session_notes,
             self.artifacts,
-            include_skills=False,
+            include_skills=True,
         )
         user_message = build_user_message(question, self.index.files, specific)
-        answer = client.chat(system_prompt, user_message)
-        self.last_response = answer
-        self.add_history(f"Asked: {question[:80]}", "chat")
-        self.save()
-        return answer
+        return system_prompt, user_message
+
+    def _find_specific_file_for_question(self, question: str) -> FileEntry | None:
+        for entry in self.index.files:
+            if entry.name.lower() in question.lower() or entry.path.lower() in question.lower():
+                if entry.read_status not in {"read_full", "read_partial"}:
+                    return self.read_file_now(entry.path) or entry
+                return entry
+        return None
 
     def status_lines(self) -> list[str]:
         indexed = len(self.index.files)
@@ -237,6 +293,20 @@ class AgentSession:
         self.store.save_session_notes(self.session_notes)
         self.store.save_artifacts(self.artifacts)
 
+    def _trim_conversation(self) -> None:
+        while self.conversation and (
+            len(self.conversation) > self.MAX_CONVERSATION_MESSAGES
+            or self._conversation_size_bytes() > self.MAX_CONVERSATION_BYTES
+        ):
+            delete_count = 2 if len(self.conversation) >= 2 else 1
+            del self.conversation[:delete_count]
+
+    def _conversation_size_bytes(self) -> int:
+        total = 0
+        for message in self.conversation:
+            total += len(message.get("content", "").encode("utf-8"))
+        return total
+
     def _write_readme(self) -> None:
         lines = [f"# {self.config.name}", "", f"Last scan: {self.index.scanned_at}", "", "## Status"]
         lines.extend(f"- {line}" for line in self.status_lines())
@@ -282,6 +352,7 @@ class AgentSession:
     def _generate_session_handoff(self, client: ClaudeClient) -> tuple[list[str], list[str]]:
         system_prompt = build_system_prompt(
             self.config,
+            self.global_config.limits.prompt_budget,
             self.index.files,
             self.memory,
             self.changes,
@@ -307,7 +378,7 @@ class AgentSession:
         if recent_response:
             user_message_lines.extend(["", "Most recent assistant response:", recent_response])
         try:
-            response = client.chat(system_prompt, "\n".join(user_message_lines), max_tokens=600)
+            response = client.chat(system_prompt.prompt, "\n".join(user_message_lines), max_tokens=600)
         except ClaudeError:
             return [], []
         sections = _parse_handoff_sections(response)

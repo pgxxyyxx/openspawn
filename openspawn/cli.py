@@ -12,7 +12,7 @@ from urllib.parse import unquote, urlparse
 from .ai import ClaudeClient, ClaudeError, get_api_key
 from .session import AgentSession
 from .store import AGENT_DIRNAME, ensure_global_dir, load_global_config, save_api_key, save_global_config
-from .utils import render_for_terminal
+from .utils import render_line
 
 FIRST_OPEN_PROMPT = (
     "Orient me to this folder for the first time. "
@@ -182,7 +182,8 @@ def run_cli(session: AgentSession, created_new: bool = False) -> None:
     if session.changes:
         print("\nChanges since last session:")
         for change in session.changes:
-            print(f"- {change.change_type}: {change.path}")
+            detail = f" ({change.details})" if change.details else ""
+            print(f"- {change.change_type}: {change.path}{detail}")
     print("\nAsk a question, or type `help` for commands.")
 
     client = None
@@ -191,13 +192,11 @@ def run_cli(session: AgentSession, created_new: bool = False) -> None:
         client = ClaudeClient(key, session.config.model)
         print("\nClaude is configured for this session.")
         print()
-        with wait_indicator("Preparing session"):
-            try:
-                response = session.chat(client, FIRST_OPEN_PROMPT if created_new else REOPEN_PROMPT)
-            except ClaudeError as exc:
-                print(f"Claude error: {exc}")
-            else:
-                print(render_for_terminal(response))
+        prompt = FIRST_OPEN_PROMPT if created_new else REOPEN_PROMPT
+        try:
+            _stream_with_progress(session, client, prompt, "Preparing session")
+        except ClaudeError as exc:
+            print(f"Claude error: {exc}")
     else:
         print("\nClaude is not configured. Local folder mode is available; run `setup` to enable chat.")
 
@@ -256,12 +255,9 @@ def run_cli(session: AgentSession, created_new: bool = False) -> None:
             print("Claude is not configured. Run `setup` to add or replace your Claude key.")
             continue
         try:
-            with wait_indicator("Thinking"):
-                response = session.chat(client, user_input)
+            _stream_with_progress(session, client, user_input, "Thinking")
         except ClaudeError as exc:
             print(f"Claude error: {exc}")
-            continue
-        print(render_for_terminal(response))
 
 
 def print_help() -> None:
@@ -295,6 +291,55 @@ def wait_indicator(message: str):
         thread.join(timeout=1)
         sys.stdout.write("\r" + " " * (len(message) + 3) + "\r")
         sys.stdout.flush()
+
+
+def _stream_with_progress(session: AgentSession, client: ClaudeClient, question: str, label: str) -> str:
+    """Stream a chat response, rendering each line with formatting as it completes."""
+    start = time.monotonic()
+    stop_event = threading.Event()
+    first_chunk = True
+    line_buffer = ""
+    in_code_block = False
+
+    def tick() -> None:
+        while not stop_event.is_set():
+            elapsed = int(time.monotonic() - start)
+            sys.stdout.write(f"\r{label}  ({elapsed}s)   ")
+            sys.stdout.flush()
+            if stop_event.wait(1.0):
+                break
+
+    print()
+    ticker = threading.Thread(target=tick, daemon=True)
+    ticker.start()
+    try:
+        for chunk in session.chat_stream(client, question):
+            if first_chunk:
+                stop_event.set()
+                ticker.join(timeout=2)
+                sys.stdout.write("\r" + " " * (len(label) + 20) + "\r")
+                sys.stdout.flush()
+                first_chunk = False
+            line_buffer += chunk
+            while "\n" in line_buffer:
+                line, line_buffer = line_buffer.split("\n", 1)
+                rendered, in_code_block = render_line(line, in_code_block)
+                for out_line in rendered:
+                    print(out_line)
+    finally:
+        if first_chunk:
+            stop_event.set()
+            ticker.join(timeout=2)
+            sys.stdout.write("\r" + " " * (len(label) + 20) + "\r")
+            sys.stdout.flush()
+    # Flush any remaining partial line
+    if line_buffer.strip():
+        rendered, _ = render_line(line_buffer, in_code_block)
+        for out_line in rendered:
+            print(out_line)
+    return session.last_response
+
+
 def normalize_folder_target(raw_target: str) -> Path:
     if raw_target.startswith("file://"):
         parsed = urlparse(raw_target)
