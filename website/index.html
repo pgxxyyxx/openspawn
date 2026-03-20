@@ -132,6 +132,19 @@
       .hero{padding-top:54px}
     }
   </style>
+
+  <script defer src="https://umami-dashboard-jet.vercel.app/script.js" data-website-id="445e5c30-a068-44bd-b401-a2aebf5d272b"></script>
+  <script type="text/javascript">
+  (() => {
+    const name = 'outbound-link-click';
+    document.querySelectorAll('a').forEach(a => {
+      if (a.host !== window.location.host && !a.getAttribute('data-umami-event')) {
+        a.setAttribute('data-umami-event', name);
+        a.setAttribute('data-umami-event-url', a.href);
+      }
+    });
+  })();
+</script>
 </head>
 <body>
   <nav class="nav">
