@@ -122,12 +122,31 @@
     }
     .final h2{margin-bottom:10px}
     footer{
-      border-top:1px solid rgba(255,255,255,.06);
-      color:var(--muted);font-size:14px
+      padding:0 0 34px
     }
-    .footer-inner{display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap;padding:22px 0 34px}
+    .footer-inner{
+      display:grid;grid-template-columns:1.1fr .9fr;gap:24px;
+      padding:26px 28px;
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:24px;
+      background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.02));
+      box-shadow:0 20px 60px rgba(0,0,0,.24)
+    }
+    .footer-brand{display:flex;flex-direction:column;gap:10px}
+    .footer-logo{font-size:18px;font-weight:700;letter-spacing:-.02em;color:var(--text)}
+    .footer-tagline{max-width:420px;color:var(--muted);line-height:1.6}
+    .footer-meta{
+      display:grid;gap:14px;align-content:start;justify-items:start
+    }
+    .footer-row{display:grid;gap:4px}
+    .footer-label{
+      font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted)
+    }
+    .footer-value{color:var(--text);line-height:1.6}
+    .footer-value a{color:var(--text)}
     @media (max-width: 960px){
       .hero-grid,.grid-4,.grid-3,.problem-grid,.flow,.contrast{grid-template-columns:1fr}
+      .footer-inner{grid-template-columns:1fr;padding:22px}
       .nav-links{display:none}
       .hero{padding-top:54px}
     }
@@ -348,8 +367,24 @@
 
   <footer>
     <div class="wrap footer-inner">
-      <div>OpenSpawn</div>
-      <div>Local-first • Works with your existing tools • Bring your own model</div>
+      <div class="footer-brand">
+        <div class="footer-logo">OpenSpawn</div>
+        <div class="footer-tagline">Local-first AI workspace for people whose projects already live in folders.</div>
+      </div>
+      <div class="footer-meta">
+        <div class="footer-row">
+          <div class="footer-label">Built by</div>
+          <div class="footer-value"><a href="https://ansatz-ventures.com" target="_blank" rel="noopener noreferrer">Ansatz Ventures</a></div>
+        </div>
+        <div class="footer-row">
+          <div class="footer-label">Contact</div>
+          <div class="footer-value"><a href="mailto:pgratzke@gmail.com">pgratzke@gmail.com</a></div>
+        </div>
+        <div class="footer-row">
+          <div class="footer-label">Product</div>
+          <div class="footer-value">Works with your existing tools and your own model setup.</div>
+        </div>
+      </div>
     </div>
   </footer>
 </body>
