@@ -24,6 +24,12 @@ CLAUDE.md
 
 # Private planning docs
 OpenSpawn PRD v4.md
+TODOS.md
+docs/next-session-handoff.md
+docs/openspawn-vnext-agentic-roadmap.md
+docs/beta-release-checklist.md
+docs/github-beta-launch-plan.md
+docs/github-beta-release-notes-draft.md
 
 # Agent state directories
 .agent/
