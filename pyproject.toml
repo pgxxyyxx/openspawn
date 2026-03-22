@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "OpenSpawn prototype"
 readme = "README.md"
 requires-python = ">=3.12"
+license = "MIT"
 dependencies = [
     "openpyxl>=3.1.5",
     "pypdf>=6.9.1",
