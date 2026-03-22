@@ -59,6 +59,7 @@ Inside a folder session:
 | Command | What it does |
 |---|---|
 | *(any question)* | Chat with Claude, grounded in your files |
+| `/skill <name> [request]` | Run a skill (summarize, compare, brief, timeline, etc.) with optional scoped request |
 | `help` | Show available commands |
 | `done` | Save a session summary — open threads, decisions |
 | `save [filename]` | Save last response to a `.md` or `.docx` file |

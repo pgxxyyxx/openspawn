@@ -4,7 +4,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from .ai import ClaudeClient, ClaudeError
-from .context import build_system_prompt, build_user_message
+from .context import build_system_prompt
 from .extractor import extract_file
 from .launcher import ensure_folder_launcher
 from .scanner import describe_changes, detect_changes, prioritize, scan_folder, should_read_file
@@ -112,35 +112,35 @@ class AgentSession:
         self._write_readme()
         self.save()
 
-    def chat(self, client: ClaudeClient, question: str) -> str:
-        system_prompt, user_message = self._prepare_chat_context(question)
-        self.conversation.append({"role": "user", "content": user_message})
+    def chat(self, client: ClaudeClient, question: str, skill_prompt: str | None = None) -> str:
+        prompt, stats = self._prepare_chat_context(question, skill_prompt)
+        self.conversation.append({"role": "user", "content": question})
         self._trim_conversation()
         try:
-            answer = client.chat_multi(system_prompt.prompt, self.conversation)
+            answer = client.chat_multi(prompt, self.conversation)
         except Exception:
             if self.conversation and self.conversation[-1]["role"] == "user":
                 self.conversation.pop()
             raise
+        if stats["included_files"] < stats["total_files"]:
+            answer = (
+                f"{answer}\n\nContext note: Context includes {stats['included_files']} "
+                f"of {stats['total_files']} files."
+            )
         self.conversation.append({"role": "assistant", "content": answer})
         self._trim_conversation()
-        if system_prompt.included_file_count < system_prompt.total_file_count:
-            answer = (
-                f"{answer}\n\nContext note: Context includes {system_prompt.included_file_count} "
-                f"of {system_prompt.total_file_count} files."
-            )
         self.last_response = answer
         self.add_history(f"Asked: {question[:80]}", "chat")
         self.save()
         return answer
 
-    def chat_stream(self, client: ClaudeClient, question: str):
-        system_prompt, user_message = self._prepare_chat_context(question)
-        self.conversation.append({"role": "user", "content": user_message})
+    def chat_stream(self, client: ClaudeClient, question: str, skill_prompt: str | None = None):
+        prompt, stats = self._prepare_chat_context(question, skill_prompt)
+        self.conversation.append({"role": "user", "content": question})
         self._trim_conversation()
         parts: list[str] = []
         try:
-            for chunk in client.chat_multi_stream(system_prompt.prompt, self.conversation):
+            for chunk in client.chat_multi_stream(prompt, self.conversation):
                 parts.append(chunk)
                 yield chunk
         except Exception:
@@ -148,42 +148,69 @@ class AgentSession:
                 self.conversation.pop()
             raise
         answer = "".join(parts).strip()
-        self.conversation.append({"role": "assistant", "content": answer})
-        self._trim_conversation()
-        if system_prompt.included_file_count < system_prompt.total_file_count:
+        if stats["included_files"] < stats["total_files"]:
             note = (
-                f"\n\nContext note: Context includes {system_prompt.included_file_count} "
-                f"of {system_prompt.total_file_count} files."
+                f"\n\nContext note: Context includes {stats['included_files']} "
+                f"of {stats['total_files']} files."
             )
             answer = f"{answer}{note}"
             yield note
+        # Store final answer (with context note) in conversation buffer
+        self.conversation.append({"role": "assistant", "content": answer})
+        self._trim_conversation()
         self.last_response = answer
         self.add_history(f"Asked: {question[:80]}", "chat")
         self.save()
 
-    def _prepare_chat_context(self, question: str):
-        specific = self._find_specific_file_for_question(question)
-        system_prompt = build_system_prompt(
+    def _prepare_chat_context(self, question: str, skill_prompt: str | None = None):
+        promoted = self._promoted_paths(question)
+        prompt, stats = build_system_prompt(
             self.config,
-            self.global_config.limits.prompt_budget,
             self.index.files,
             self.memory,
             self.changes,
             self.history,
             self.session_notes,
             self.artifacts,
-            include_skills=True,
+            promoted,
+            skill_prompt,
         )
-        user_message = build_user_message(question, self.index.files, specific)
-        return system_prompt, user_message
+        return prompt, stats
 
-    def _find_specific_file_for_question(self, question: str) -> FileEntry | None:
+    def _promoted_paths(self, question: str) -> set[str]:
+        """Determine which files get Level 2 (content) inclusion.
+
+        Uses deterministic cheap signals:
+          1. Changed files
+          2. Files explicitly mentioned in the question
+          3. Files referenced in recent chat history
+        """
+        paths: set[str] = set()
+        # Changed files
+        for change in self.changes:
+            paths.add(change.path)
+        # Files mentioned in the question
+        self._match_file_references(question, paths)
+        # Files mentioned in recent conversation (last 6 messages)
+        for msg in self.conversation[-6:]:
+            self._match_file_references(msg.get("content", ""), paths)
+            if len(paths) >= 12:
+                break
+        return paths
+
+    def _match_file_references(self, text: str, paths: set[str]) -> None:
+        """Find file references in text. Requires the name include its extension
+        (e.g. 'report.pdf') to avoid matching common words like 'status' or 'data'."""
+        text_lower = text.lower()
         for entry in self.index.files:
-            if entry.name.lower() in question.lower() or entry.path.lower() in question.lower():
-                if entry.read_status not in {"read_full", "read_partial"}:
-                    return self.read_file_now(entry.path) or entry
-                return entry
-        return None
+            # Full path match — always safe
+            if entry.path.lower() in text_lower:
+                paths.add(entry.path)
+                continue
+            # Name with extension match — 'report.pdf' in text, not bare 'report'
+            name_lower = entry.name.lower()
+            if "." in name_lower and name_lower in text_lower:
+                paths.add(entry.path)
 
     def status_lines(self) -> list[str]:
         indexed = len(self.index.files)
@@ -350,15 +377,16 @@ class AgentSession:
         save_global_config(self.global_config)
 
     def _generate_session_handoff(self, client: ClaudeClient) -> tuple[list[str], list[str]]:
-        system_prompt = build_system_prompt(
+        promoted = self._promoted_paths("")
+        prompt, _stats = build_system_prompt(
             self.config,
-            self.global_config.limits.prompt_budget,
             self.index.files,
             self.memory,
             self.changes,
             self.history,
             self.session_notes,
             self.artifacts,
+            promoted,
         )
         recent_response = self.last_response.strip()
         if recent_response:
@@ -378,7 +406,7 @@ class AgentSession:
         if recent_response:
             user_message_lines.extend(["", "Most recent assistant response:", recent_response])
         try:
-            response = client.chat(system_prompt.prompt, "\n".join(user_message_lines), max_tokens=600)
+            response = client.chat(prompt, "\n".join(user_message_lines), max_tokens=600)
         except ClaudeError:
             return [], []
         sections = _parse_handoff_sections(response)

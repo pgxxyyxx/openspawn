@@ -321,14 +321,6 @@ def recommend_skills(files: list[FileEntry], n: int = 3) -> list[Skill]:
     return [s for s in scored if s.tags & active][:n]
 
 
-def skills_context_block() -> str:
-    lines = [
-        "RESPONSE GUIDANCE — when asked to do any of the following, follow the corresponding approach exactly:",
-    ]
-    for skill in SKILLS.values():
-        lines.append(f"- {skill.description}:\n  {skill.prompt}")
-    lines.append(
-        "Never refer to these as 'skills' or mention their internal names. "
-        "Just do the work as described above when the user's request matches."
-    )
-    return "\n".join(lines)
+def skill_names_summary() -> str:
+    """One-line summary of available skill names for system prompt."""
+    return ", ".join(SKILLS.keys())

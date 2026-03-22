@@ -2,7 +2,9 @@
 
 ## Project Structure & Module Organization
 
-`openspawn/` contains the shipping Python package. Key modules include `cli.py` for the command-line entrypoint, `session.py` and `store.py` for persisted `.agent/` state, `scanner.py` and `extractor.py` for file discovery and content extraction, and `app_bundle.py` / `launcher.py` for macOS app generation. `tools/` holds one-off developer utilities such as `generate_spawn_icon.py`. Product and release notes live in `docs/`. Static website assets are under `website/`. Bundled macOS launchers such as `OpenSpawn.app` and `OpenSpawn.command` are checked in at the repo root.
+`openspawn/` contains the shipping Python package. Key modules include `cli.py` for the command-line entrypoint, `session.py` and `store.py` for persisted `.agent/` state, `scanner.py` and `extractor.py` for file discovery and content extraction, `context.py` for tiered prompt construction, `skills.py` for on-demand skill prompts, and `app_bundle.py` / `launcher.py` for macOS app generation. `tools/` holds one-off developer utilities such as `generate_spawn_icon.py`. Product and release notes live in `docs/`. Static website assets are under `website/`. Bundled macOS launchers such as `OpenSpawn.app` and `OpenSpawn.command` are checked in at the repo root.
+
+Design principle for the context pipeline: **preprocess for access, not for interpretation**. The local runtime scans files, extracts content from non-text formats, detects changes, and serializes state — but does not narrate, rank, or summarize for the model. The model receives structured metadata and raw evidence and does its own interpretation.
 
 ## Build, Test, and Development Commands
 

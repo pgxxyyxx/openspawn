@@ -254,14 +254,37 @@ def run_cli(session: AgentSession, created_new: bool = False) -> None:
         if client is None:
             print("Claude is not configured. Run `setup` to add or replace your Claude key.")
             continue
+        skill_prompt = None
+        if cmd.startswith("/skill "):
+            from .skills import get_skill
+            remainder = user_input.split(maxsplit=1)[1].strip()
+            # Try two-word match first (for aliases like "next steps", "exec brief")
+            parts = remainder.split(maxsplit=2)
+            skill = None
+            extra = None
+            if len(parts) >= 2:
+                skill = get_skill(f"{parts[0]} {parts[1]}")
+                if skill:
+                    extra = parts[2] if len(parts) > 2 else None
+            if skill is None:
+                skill = get_skill(parts[0])
+                if skill:
+                    extra = " ".join(parts[1:]) if len(parts) > 1 else None
+            if skill:
+                skill_prompt = skill.prompt
+                user_input = extra if extra else skill.description
+            else:
+                print(f"Unknown skill: {parts[0]}. Available: summarize, compare, brief, timeline, decisions, risks, audit, verify, metrics, status, gaps, next-steps, memo, bullets, qa, year-over-year, narrative, stakeholder, code-review, coauthor, debug, weekly-review")
+                continue
         try:
-            _stream_with_progress(session, client, user_input, "Thinking")
+            _stream_with_progress(session, client, user_input, "Thinking", skill_prompt=skill_prompt)
         except ClaudeError as exc:
             print(f"Claude error: {exc}")
 
 
 def print_help() -> None:
     print("Ask a question about the folder, or use one of these commands:")
+    print("  /skill <name>      Run a skill (summarize, compare, brief, timeline, ...)")
     print("  save [file]        Save last response to a file (.md or .docx)")
     print("  done               Save a session summary")
     print("  setup              Configure or replace Claude setup")
@@ -293,7 +316,7 @@ def wait_indicator(message: str):
         sys.stdout.flush()
 
 
-def _stream_with_progress(session: AgentSession, client: ClaudeClient, question: str, label: str) -> str:
+def _stream_with_progress(session: AgentSession, client: ClaudeClient, question: str, label: str, skill_prompt: str | None = None) -> str:
     """Stream a chat response, rendering each line with formatting as it completes."""
     start = time.monotonic()
     stop_event = threading.Event()
@@ -313,7 +336,7 @@ def _stream_with_progress(session: AgentSession, client: ClaudeClient, question:
     ticker = threading.Thread(target=tick, daemon=True)
     ticker.start()
     try:
-        for chunk in session.chat_stream(client, question):
+        for chunk in session.chat_stream(client, question, skill_prompt=skill_prompt):
             if first_chunk:
                 stop_event.set()
                 ticker.join(timeout=2)

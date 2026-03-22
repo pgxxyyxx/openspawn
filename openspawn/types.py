@@ -112,9 +112,3 @@ class ExtractionResult:
     error: str | None = None
 
 
-@dataclass
-class PromptBuildResult:
-    prompt: str
-    included_file_count: int
-    total_file_count: int
-    estimated_tokens: int
