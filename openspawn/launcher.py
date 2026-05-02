@@ -1,20 +1,15 @@
 from __future__ import annotations
 
-import os
 import subprocess
 import tempfile
 import shutil
 from pathlib import Path
 
 from .app_bundle import _disable_stock_applet_icon
-from .store import global_dir
 
 
 def ensure_folder_launcher(folder: Path) -> Path:
     runtime_root = Path(__file__).resolve().parents[1]
-    home_override = os.environ.get("OPENSPAWN_HOME", str(global_dir()))
-    runtime_python = runtime_root / ".venv" / "bin" / "python"
-    python_exec = str(runtime_python) if runtime_python.exists() else "python3"
 
     app_dir = folder / "OpenSpawn Agent.app"
     if app_dir.exists():
@@ -23,7 +18,7 @@ def ensure_folder_launcher(folder: Path) -> Path:
     command_path = folder / "OpenSpawn Agent.command"
     command_path.unlink(missing_ok=True)
 
-    script = _folder_agent_script(runtime_root, python_exec, home_override, folder)
+    script = _folder_agent_script(runtime_root, folder)
     with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as handle:
         handle.write(script)
         source = Path(handle.name)
@@ -49,10 +44,9 @@ def remove_folder_launcher(folder: Path) -> None:
     command_path.unlink(missing_ok=True)
 
 
-def _folder_agent_script(runtime_root: Path, python_exec: str, home_override: str, folder: Path) -> str:
+def _folder_agent_script(runtime_root: Path, folder: Path) -> str:
     root = _js_string(str(runtime_root))
-    python = _js_string(python_exec)
-    home = _js_string(home_override)
+    launcher = _js_string(str(runtime_root / "bin" / "openspawn-pi-launcher.sh"))
     target = _js_string(str(folder))
     return f"""
 ObjC.import('stdlib');
@@ -64,7 +58,7 @@ function shellQuote(value) {{
 
 function launcherScript() {{
   var command = "cd " + shellQuote({root}) + "\\n" +
-    "OPENSPAWN_HOME=" + shellQuote({home}) + " " + shellQuote({python}) + " -m openspawn --path " + shellQuote({target});
+    "/bin/bash " + shellQuote({launcher}) + " " + shellQuote({target});
   return [
     "#!/bin/bash",
     "set -euo pipefail",

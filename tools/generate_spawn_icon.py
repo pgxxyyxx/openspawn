@@ -7,7 +7,7 @@ import tempfile
 from pathlib import Path
 
 
-ICON_SOURCE = Path("icon") / "Demonic showdown in glowing energy portal.png"
+ICON_SOURCE = Path("icon") / "openspawn-abstract-spawn-icon.png"
 ICON_TYPES = {
     16: b"icp4",
     32: b"icp5",

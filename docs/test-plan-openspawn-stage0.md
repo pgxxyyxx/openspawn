@@ -1,44 +1,46 @@
 # Test Plan
 
-Generated from PRD engineering review on 2026-03-18
+Updated for the Pi-backed launcher spike on 2026-05-02.
 Branch: master
 Repo: openspawn/prototype
 
 ## Affected Pages/Routes
 
-- CLI first-launch flow — verify provider setup, skip-AI flow, and degraded-mode messaging
-- CLI spawn flow — verify folder indexing, extraction progress, partial-state messaging, and session entry
-- CLI open flow — verify change detection, state reload, and status summary
-- CLI command surface — verify `status`, `files`, `memory`, `history`, `scan`, `scan more`, `read <file>`, and `why`
+- Main app droplet flow — verify a dropped folder opens `bin/openspawn-pi-launcher.sh`
+- Pi auth preflight — verify no `.openspawn/` memory is created before Pi credentials exist
+- First-run flow — verify `.openspawn/` and `.pi/APPEND_SYSTEM.md` are created after auth
+- Reopen flow — verify existing `.openspawn/` memory is read before new orientation work
+- Icon/app wrapper — verify `OpenSpawn.app` uses the rebuilt app icon and launches the shell path
 
 ## Key Interactions to Verify
 
-- Launch without prior config and skip AI setup
-- Launch without prior config and complete Claude setup
-- Spawn an agent from a small fixture folder
-- Re-open the same folder after add/modify/delete changes
-- Ask a question answered from already-read content
-- Ask a question that triggers on-demand file reading
-- Ask a question when only metadata is available
-- Recover from provider failure while keeping the session usable
-- Recover from corrupt but recoverable `.agent` state
+- Launch without Pi installed and confirm the install message is clear
+- Launch with Pi installed but no credentials and confirm the user is directed to `/login`
+- Confirm no `.openspawn/` folder is created during the no-auth setup path
+- Complete Pi login with an API-key provider or subscription provider
+- Drag a small fixture folder onto `OpenSpawn.app`
+- Confirm `.openspawn/project.md`, `.openspawn/wiki/index.md`, `.openspawn/wiki/log.md`, and `.pi/APPEND_SYSTEM.md` are created
+- Confirm existing `.pi/APPEND_SYSTEM.md` content is preserved outside the marked OpenSpawn block
+- Confirm Pi writes a useful first orientation and durable wiki pages
+- Re-open the same folder and confirm Pi uses `.openspawn/` memory before inspecting new files
+- Confirm app icon updates after running `tools/generate_spawn_icon.py` and rebuilding `OpenSpawn.app`
 
 ## Edge Cases
 
 - Empty folder or hidden-files-only folder
-- No readable supported files
-- Large folder that exceeds initial indexing and read budget
-- PDF parse timeout or encrypted PDF
-- Malformed Excel workbook
-- Unsupported binary file
-- Missing state files
-- Partially written or malformed JSON in `.agent`
-- Metadata-only answer must not imply full file read
+- Folder that already has `.pi/APPEND_SYSTEM.md`
+- Folder that already has `.openspawn/` from a prior run
+- Folder path with spaces
+- Folder path received as `file://...`
+- No Pi binary on `PATH`
+- Empty or malformed Pi auth file
+- Provider login succeeds but selected model later fails
+- User asks Pi to edit source files before OpenSpawn has produced an orientation
 
 ## Critical Paths
 
-- First launch -> skip AI -> spawn folder -> use non-AI commands successfully
-- First launch -> configure Claude -> spawn folder -> ask grounded question with file citations
-- Spawn folder -> persist state -> reopen later -> detect changes -> preserve continuity
-- Ask about not-yet-read file -> on-demand read -> answer from content or explain limitation clearly
-- Provider failure during answer -> clear error -> remain in usable session
+- Drag folder -> no auth -> `/login` guidance -> no `.openspawn/` created
+- Drag folder -> auth present -> scaffold `.openspawn/` -> Pi writes first orientation and wiki
+- Drag same folder later -> Pi reads memory -> updates wiki/log -> gives reopen note
+- Existing `.pi/APPEND_SYSTEM.md` -> launcher updates only the OpenSpawn block
+- Rebuild icon -> rebuild app -> dragged folder still launches Pi path

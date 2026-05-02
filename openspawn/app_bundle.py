@@ -8,8 +8,7 @@ from pathlib import Path
 
 def build_main_app(destination: Path) -> Path:
     runtime_root = Path(__file__).resolve().parents[1]
-    python_exec = runtime_root / ".venv" / "bin" / "python"
-    script = _jxa_script(runtime_root, python_exec)
+    script = _jxa_script(runtime_root)
 
     if destination.exists():
         shutil.rmtree(destination)
@@ -30,9 +29,9 @@ def build_main_app(destination: Path) -> Path:
     return destination
 
 
-def _jxa_script(runtime_root: Path, python_exec: Path) -> str:
+def _jxa_script(runtime_root: Path) -> str:
     root = _js_string(str(runtime_root))
-    python = _js_string(str(python_exec))
+    launcher = _js_string(str(runtime_root / "bin" / "openspawn-pi-launcher.sh"))
     return f"""
 ObjC.import('stdlib');
 ObjC.import('Foundation');
@@ -42,7 +41,7 @@ function shellQuote(value) {{
 }}
 
 function launcherScript(target) {{
-  var command = "cd " + shellQuote({root}) + "\\n" + shellQuote({python}) + " -m openspawn";
+  var command = "cd " + shellQuote({root}) + "\\n" + "/bin/bash " + shellQuote({launcher});
   if (target) {{
     command += " " + shellQuote(target);
   }}

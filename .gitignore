@@ -33,3 +33,5 @@ docs/github-beta-release-notes-draft.md
 
 # Agent state directories
 .agent/
+.openspawn/
+.pi/
